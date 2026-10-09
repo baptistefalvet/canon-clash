@@ -1,4 +1,4 @@
-// Name plates beside each cannon, plus (optional) the live blackjack bubble of each opponent.
+// Name plates beside each cannon (the live charge gauge is the ring drawn around the cannon itself).
 
 import { fx } from '../../config/fx';
 import { TAU } from '../util/math';
@@ -55,56 +55,5 @@ export function drawSeatTags(ctx: CanvasRenderingContext2D, m: Match) {
     ctx.stroke();
     ctx.textAlign = 'left';
     outlinedText(ctx, label, x + t.padX + dot + 4, y + 1, t.fontSize, '#ffffff');
-
-    // Opponent blackjack bubble
-    const round = m.round;
-    if (!t.handBubble || !round || s.isHuman) continue;
-    const h = round.hands[s.seat];
-    if (!h.cards.length) continue;
-    const resolved = h.status !== 'playing';
-    const out = round.outcome(s.seat);
-    let text = String(h.total);
-    let bg = '#ffffff';
-    let fg = '#1b1430';
-    if (resolved && round.phase !== 'dealing') {
-      if (out !== null) {
-        bg = '#52e04c';
-        fg = '#ffffff';
-      } else {
-        bg = '#fb586c';
-        fg = '#ffffff';
-        text = `${h.total} Raté`;
-      }
-    }
-    ctx.font = `${t.fontSize}px 'Lilita One'`;
-    const bw = Math.max(t.height * 1.6, ctx.measureText(text).width + 50);
-    const bx = left ? x + w + 10 : x - 10 - bw;
-    const by = y - t.height / 2;
-    pill(ctx, bx, by, bw, t.height);
-    ctx.fillStyle = bg;
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#1b1430';
-    ctx.stroke();
-    // mini card icon
-    ctx.save();
-    ctx.translate(bx + 18, y);
-    ctx.rotate(-0.15);
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#1b1430';
-    ctx.lineWidth = 2;
-    ctx.fillRect(-8, -11, 16, 22);
-    ctx.strokeRect(-8, -11, 16, 22);
-    ctx.fillStyle = '#e22e41';
-    ctx.fillRect(-4, -6, 8, 12);
-    ctx.restore();
-    ctx.textAlign = 'left';
-    if (fg === '#ffffff') outlinedText(ctx, text, bx + 34, y + 1, t.fontSize, fg);
-    else {
-      ctx.font = `${t.fontSize}px 'Lilita One'`;
-      ctx.fillStyle = fg;
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, bx + 34, y + 1);
-    }
   }
 }

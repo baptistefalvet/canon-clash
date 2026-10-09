@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { economy } from '../../config/economy';
-import { bonusByTotal } from '../../config/bonuses';
+import { bonusByLevel } from '../../config/bonuses';
+import { charge as chargeCfg } from '../../config/charge';
 import { formatEuros } from '../purse/format';
 import { Backdrop } from '../ui/Backdrop';
 import { Logo } from '../ui/Logo';
@@ -10,10 +11,10 @@ import { OutlinedText } from '../ui/OutlinedText';
 import { BonusCard } from '../hud/BonusCard';
 
 export function CardFan({ top }: { top: number }) {
-  const totals = [18, 19, 20, 21];
+  const levels = Object.keys(bonusByLevel).map(Number);
   return (
     <div style={{ position: 'absolute', left: 0, right: 0, top, height: 300 }}>
-      {totals.map((t, i) => {
+      {levels.map((t, i) => {
         const a = (i - 1.5) * 9;
         return (
           <div
@@ -26,7 +27,7 @@ export function CardFan({ top }: { top: number }) {
               animation: `float-y ${2.6 + i * 0.3}s ease-in-out ${i * 0.2}s infinite`,
             }}
           >
-            <BonusCard bonus={bonusByTotal[t]} width={196} height={210} state={t === 21 ? 'target' : 'idle'} />
+            <BonusCard bonus={bonusByLevel[t]} width={196} height={210} state={t === chargeCfg.cap ? 'target' : 'idle'} />
           </div>
         );
       })}
@@ -47,7 +48,7 @@ export function TitleLayout({ footer }: { footer: ReactNode }) {
         </OutlinedText>
         <br />
         <OutlinedText size={58} style={{ whiteSpace: 'normal', lineHeight: 1.15, marginTop: 12 }}>
-          boostez vos canons au <span style={{ color: '#ffd75a' }}>Blackjack</span> !
+          chargez vos canons <span style={{ color: '#ffd75a' }}>à bloc</span> !
         </OutlinedText>
       </div>
 

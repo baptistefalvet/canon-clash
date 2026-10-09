@@ -51,7 +51,8 @@ export function drawCannonDemo(ctx: CanvasRenderingContext2D, w: number, h: numb
   ctx.rect(0, 0, w, h);
   ctx.clip();
   ctx.scale(k, k);
-  ctx.translate(-view.x, -view.y);
+  // anchor the crop on the bottom edge of the board so the corner cannon is in frame
+  ctx.translate(-view.x, -(view.y + view.h - h / k));
   drawTiles(ctx, grid, palettes);
   const cannon = new Cannon(0, 'BL', grid, 0);
   // sweep arc

@@ -1,51 +1,41 @@
-// Bottom drawer (HUD layout C). Collapsed between deals: next-deal gauge + the bonus table (hand total 18–21 → bonus).
-// During a deal it slides up over the bottom of the board: decision timer, rivals' hands, your hand, bonus chips, HIT / STAND.
-// Staged by `panelStage`: each stage highlights what the player is asked to do and hides the rest.
+// Bottom drawer (HUD layout C). Collapsed between rounds: next-round bar + the gauge legend (charge level → special shot).
+// During a round it slides up over the bottom of the board: decision timer, rivals' gauges, your powder cards,
+// the power gauge, CHARGER / FEU !. Staged by `panelStage`: each stage highlights what the player is asked to do.
 
 import type { CSSProperties } from 'react';
-import { bonusByTotal } from '../../config/bonuses';
-import { blackjack as bjCfg, cardVisual } from '../../config/blackjack';
+import { bonusByLevel } from '../../config/bonuses';
+import { cardVisual, charge as chargeCfg, jam as jamCfg } from '../../config/charge';
 import { gameLayout, stage as stageFrame } from '../../config/layout';
 import { staging, stagingCopy as copy } from '../../config/staging';
-import { PlayingCard } from '../blackjack/PlayingCard';
+import { maxCard, minCard } from '../charge/cards';
+import { ChargeCard } from '../charge/ChargeCard';
+import { PowerGauge } from '../charge/PowerGauge';
 import type { SeatInfo } from '../game/match';
-import type { MatchUi, RivalHandUi } from '../game/snapshot';
-import { bonusArt } from '../ui/bonusArt';
+import type { MatchUi, RivalGaugeUi } from '../game/snapshot';
+import { levelColor } from '../cannon/cannon';
 import { HexBadge } from '../ui/HexBadge';
 import { OutlinedText } from '../ui/OutlinedText';
-import { handOnTable, panelStage, type PanelStage } from './stage';
+import { panelStage, roundOn, type PanelStage } from './stage';
 
 const D = gameLayout.drawer;
-const TOTALS = [18, 19, 20, 21];
 
-type ChipState = 'idle' | 'dim' | 'target' | 'won';
+/** « 3/5 »: the round being played, or the next one between rounds. */
+const roundIndex = (ui: MatchUi) => `${Math.min(ui.roundsTotal, Math.max(1, ui.roundsStarted + (ui.gauge ? 0 : 1)))}/${ui.roundsTotal}`;
 
-function chipState(total: number, ui: MatchUi, stage: PanelStage): ChipState {
-  if (stage.kind === 'lastStretch' || stage.kind === 'ended') return 'dim';
-  const h = ui.hand;
-  if (!h) return 'idle';
-  if (h.phase === 'results' || h.phase === 'done') return h.outcome === total ? 'won' : 'dim';
-  if (h.status === 'bust') return 'dim';
-  return h.total === total ? 'target' : 'dim';
-}
-
-/** « 3/5 »: the deal being played, or the next one between deals. */
-const dealIndex = (ui: MatchUi) => `${Math.min(ui.roundsTotal, Math.max(1, ui.roundsStarted + (ui.hand ? 0 : 1)))}/${ui.roundsTotal}`;
+const STRIPES = (a: string, b: string) => `repeating-linear-gradient(115deg, ${a} 0 46px, ${b} 46px 60px)`;
 
 // ---------------------------------------------------------------- collapsed tray
 
-function NextDealGauge({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
-  const g = D.gauge;
+function NextRoundBar({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
+  const g = D.bar;
   const waiting = stage.kind === 'waiting';
-  const ready = waiting && stage.ready;
-  const progress = stage.kind === 'waiting' || stage.kind === 'lastStretch' ? stage.progress : 1;
-  const secs = stage.kind === 'waiting' || stage.kind === 'lastStretch' ? stage.secs : 0;
-  const label = waiting ? (ready ? copy.barReady : `${copy.barNextDeal} · ${dealIndex(ui)}`) : copy.barLastStretch;
-  const fill = ready
-    ? 'repeating-linear-gradient(115deg, #ffd75a 0 46px, #f1b340 46px 60px)'
-    : waiting
-      ? 'repeating-linear-gradient(115deg, #52e04c 0 46px, #2fbd35 46px 60px)'
-      : 'repeating-linear-gradient(115deg, #8f93ad 0 46px, #767a96 46px 60px)';
+  const jammed = ui.jamLeft > 0 && ui.phase === 'playing';
+  const ready = waiting && stage.ready && !jammed;
+  const progress = jammed ? ui.jamLeft / jamCfg.durationSec : stage.kind === 'waiting' || stage.kind === 'lastStretch' ? stage.progress : 1;
+  const secs = jammed ? Math.ceil(ui.jamLeft) : stage.kind === 'waiting' || stage.kind === 'lastStretch' ? stage.secs : 0;
+  const label = jammed ? copy.barJammed : waiting ? (ready ? copy.barReady : `${copy.barNextRound} · ${roundIndex(ui)}`) : copy.barLastStretch;
+  const fill = jammed ? STRIPES('#ff8a98', '#fb586c') : ready ? STRIPES('#ffd75a', '#f1b340') : waiting ? STRIPES('#52e04c', '#2fbd35') : STRIPES('#8f93ad', '#767a96');
+  const glow = jammed ? '0 0 30px 8px rgba(251,88,108,0.65)' : ready ? '0 0 30px 8px rgba(255,215,90,0.65)' : null;
   const barInset = g.badgeSize / 2;
   return (
     <div style={{ position: 'absolute', left: g.left, top: g.top, width: g.width, height: g.height }}>
@@ -58,7 +48,7 @@ function NextDealGauge({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
           height: g.barHeight,
           borderRadius: g.barHeight / 2,
           background: '#ffffff',
-          boxShadow: ready ? '0 0 0 6px #1b1430, inset 0 -6px 0 #d7d9e6, 0 0 30px 8px rgba(255,215,90,0.65)' : '0 0 0 6px #1b1430, inset 0 -6px 0 #d7d9e6',
+          boxShadow: `0 0 0 6px #1b1430, inset 0 -6px 0 #d7d9e6${glow ? `, ${glow}` : ''}`,
           overflow: 'hidden',
           transition: 'box-shadow 250ms',
         }}
@@ -89,18 +79,18 @@ function NextDealGauge({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
             color: '#5b5f7a',
             letterSpacing: 1,
             mixBlendMode: 'multiply',
-            animation: ready ? 'pulse 0.5s ease-in-out infinite' : undefined,
+            animation: ready || jammed ? 'pulse 0.5s ease-in-out infinite' : undefined,
           }}
         >
           {label}
         </div>
       </div>
       <HexBadge
-        key={ready ? secs : 'idle'}
+        key={ready || jammed ? secs : 'idle'}
         size={g.badgeSize}
         fontSize={g.badgeFontSize}
-        skin={ready ? 'gold' : waiting ? 'green' : 'grey'}
-        style={{ position: 'absolute', left: 0, top: (g.height - g.badgeSize) / 2, animation: ready ? 'tick-pop 0.5s ease-out' : undefined }}
+        skin={jammed ? 'red' : ready ? 'gold' : waiting ? 'green' : 'grey'}
+        style={{ position: 'absolute', left: 0, top: (g.height - g.badgeSize) / 2, animation: ready || jammed ? 'tick-pop 0.5s ease-out' : undefined }}
       >
         {secs}
       </HexBadge>
@@ -108,76 +98,12 @@ function NextDealGauge({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
   );
 }
 
-/** Mini playing card carrying a hand total: says « 18 » is a card total, not a level or a price. */
-function TotalCard({ total, jackpot }: { total: number; jackpot: boolean }) {
-  const c = D.legend.card;
-  return (
-    <div
-      style={{
-        width: c.width,
-        height: c.height,
-        borderRadius: c.radius,
-        flexShrink: 0,
-        background: 'linear-gradient(180deg,#ffffff,#eeeaf7)',
-        boxShadow: `0 0 0 4px #1b1430${jackpot ? ', 0 0 0 7px #f2b52e' : ''}`,
-        transform: `rotate(${c.tiltDeg}deg)`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'var(--font-title)',
-        fontSize: c.fontSize,
-        lineHeight: 1,
-        color: jackpot ? '#e39a25' : '#1b1430',
-      }}
-    >
-      {total}
-    </div>
-  );
-}
-
-/** One row of the bonus table: flat and read-only, so it never looks like a button to press. */
-function BonusTile({ total, state, flying }: { total: number; state: ChipState; flying?: boolean }) {
+function ClosedTray({ ui, stage, flyLevel }: { ui: MatchUi; stage: PanelStage; flyLevel: number | null }) {
   const l = D.legend;
-  const bonus = bonusByTotal[total];
-  const jackpot = total === bjCfg.target;
-  const dim = state === 'dim';
-  const won = state === 'won';
-  return (
-    <div
-      style={{
-        position: 'relative',
-        height: l.height,
-        borderRadius: l.radius,
-        background: jackpot ? '#3d3550' : '#2b2f47',
-        boxShadow: won
-          ? `inset 0 0 0 5px #ffd75a, 0 0 30px 8px ${jackpot ? 'rgba(255,214,80,0.75)' : 'rgba(140,255,120,0.7)'}`
-          : `inset 0 0 0 4px ${jackpot ? '#a77a2a' : '#191c2e'}`,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        filter: dim ? 'grayscale(0.8) brightness(0.75)' : undefined,
-        transition: 'filter 300ms, box-shadow 200ms',
-        animation: flying ? 'card-fly 650ms cubic-bezier(.4,0,.6,1) forwards' : undefined,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <TotalCard total={total} jackpot={jackpot} />
-        <img src={bonusArt(bonus.id)} alt="" draggable={false} style={{ width: l.artSize, height: l.artSize, objectFit: 'contain' }} />
-      </div>
-      <OutlinedText size={l.nameFontSize} color={jackpot ? '#ffd75a' : '#ffffff'}>
-        {bonus.name}
-      </OutlinedText>
-    </div>
-  );
-}
-
-function ClosedTray({ ui, stage, flyTotal }: { ui: MatchUi; stage: PanelStage; flyTotal: number | null }) {
-  const l = D.legend;
+  const dim = stage.kind === 'lastStretch' || stage.kind === 'ended';
   return (
     <>
-      <NextDealGauge ui={ui} stage={stage} />
+      <NextRoundBar ui={ui} stage={stage} />
       <div
         style={{
           position: 'absolute',
@@ -194,27 +120,8 @@ function ClosedTray({ ui, stage, flyTotal }: { ui: MatchUi; stage: PanelStage; f
       >
         {copy.legendCaption}
       </div>
-      <div
-        style={{
-          position: 'absolute',
-          left: l.left,
-          top: l.top,
-          width: l.width,
-          display: 'grid',
-          gridTemplateColumns: `repeat(${TOTALS.length}, minmax(0, 1fr))`,
-          gap: l.gap,
-        }}
-      >
-        {TOTALS.map((t) => (
-          <div key={t} style={{ position: 'relative' }}>
-            <BonusTile total={t} state={chipState(t, ui, stage)} />
-            {flyTotal === t && (
-              <div style={{ position: 'absolute', inset: 0 }}>
-                <BonusTile total={t} state="won" flying />
-              </div>
-            )}
-          </div>
-        ))}
+      <div style={{ position: 'absolute', left: l.left, top: l.top, opacity: dim ? 0.55 : 1, filter: dim ? 'grayscale(0.6)' : undefined, transition: 'opacity 300ms' }}>
+        <PowerGauge width={l.width} headerHeight={l.headerHeight} barHeight={l.barHeight} artSize={l.artSize} nameFontSize={l.nameFontSize} level={0} flyLevel={flyLevel} />
       </div>
     </>
   );
@@ -224,7 +131,7 @@ function ClosedTray({ ui, stage, flyTotal }: { ui: MatchUi; stage: PanelStage; f
 
 function PromptBar({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
   const p = D.prompt;
-  const h = ui.hand;
+  const g = ui.gauge;
   const deciding = stage.kind === 'deciding';
   const urgent = deciding && stage.urgent;
   const fillK = deciding ? stage.timeK : 1;
@@ -234,8 +141,10 @@ function PromptBar({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
       : deciding
         ? urgent
           ? copy.promptUrgent
-          : copy.promptDecide
-        : h && (h.phase === 'results' || h.phase === 'done')
+          : stage.fire
+            ? copy.promptInZone
+            : copy.promptBelowZone
+        : g && (g.phase === 'results' || g.phase === 'done')
           ? copy.promptResults
           : copy.promptWaitRivals;
   const fill =
@@ -243,10 +152,10 @@ function PromptBar({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
       ? 'linear-gradient(180deg,#b9a6f0,#8c74d6)'
       : deciding
         ? urgent
-          ? 'repeating-linear-gradient(115deg, #ff8a98 0 46px, #fb586c 46px 60px)'
-          : 'repeating-linear-gradient(115deg, #ffd75a 0 46px, #f1b340 46px 60px)'
+          ? STRIPES('#ff8a98', '#fb586c')
+          : STRIPES('#ffd75a', '#f1b340')
         : 'linear-gradient(180deg,#c9cbe0,#a5a8c2)';
-  const right = deciding && h ? `${Math.ceil(h.decisionLeft)} s` : `${copy.dealCounter} ${dealIndex(ui)}`;
+  const right = deciding && g ? `${Math.ceil(g.decisionLeft)} s` : `${copy.roundCounter} ${roundIndex(ui)}`;
   return (
     <div
       style={{
@@ -300,16 +209,43 @@ function PromptBar({ ui, stage }: { ui: MatchUi; stage: PanelStage }) {
   );
 }
 
-function rivalLabel(r: RivalHandUi, revealed: boolean): { text: string; out: boolean; good: boolean } {
-  if (r.status === 'playing' || !revealed) return { text: copy.rivalPlaying, out: false, good: false };
-  if (r.status === 'bust') return { text: copy.rivalBust, out: true, good: false };
-  if (r.outcome !== null) return { text: bonusByTotal[r.outcome]?.name.toUpperCase() ?? copy.rivalStood, out: false, good: true };
-  return { text: copy.rivalMissed, out: true, good: false };
+function rivalLabel(r: RivalGaugeUi): { text: string; out: boolean; color: string } {
+  if (r.status === 'charging') return { text: copy.rivalCharging, out: false, color: '#ffffff' };
+  if (r.status === 'jammed') return { text: copy.rivalJammed, out: true, color: '#ff8a98' };
+  if (r.outcome !== null) {
+    const b = bonusByLevel[r.outcome];
+    return { text: b.name.toUpperCase(), out: false, color: b.color };
+  }
+  return { text: copy.rivalWeak, out: true, color: '#c9c3e6' };
+}
+
+/** Tiny version of the gauge: one cell per level, lit in the zone colors (red when jammed). */
+function MiniGauge({ level, jammed }: { level: number; jammed: boolean }) {
+  const r = D.rivals;
+  return (
+    <div style={{ display: 'flex', gap: 3, height: r.cellHeight, padding: 3, borderRadius: r.cellHeight, background: '#1b1430', animation: jammed ? 'shake-x 0.4s ease-out' : undefined }}>
+      {Array.from({ length: chargeCfg.cap }, (_, i) => {
+        const l = i + 1;
+        const lit = jammed || l <= level;
+        const zone = !!bonusByLevel[l];
+        return (
+          <span
+            key={l}
+            style={{
+              flex: zone ? 1.6 : 1,
+              borderRadius: 4,
+              background: jammed ? '#ff3b52' : lit ? levelColor(l) : zone ? `${levelColor(l)}44` : '#33374f',
+              transition: 'background 150ms',
+            }}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 function RivalChips({ ui, seats }: { ui: MatchUi; seats: SeatInfo[] }) {
   const r = D.rivals;
-  const revealed = !!ui.hand && ui.hand.phase !== 'dealing';
   return (
     <div
       style={{
@@ -325,32 +261,38 @@ function RivalChips({ ui, seats }: { ui: MatchUi; seats: SeatInfo[] }) {
     >
       {ui.rivals.map((rv) => {
         const s = seats[rv.seat];
-        const l = rivalLabel(rv, revealed);
+        const l = rivalLabel(rv);
         return (
           <div
             key={rv.seat}
             style={{
-              borderRadius: r.height / 2,
+              borderRadius: 24,
               background: '#2b2f47',
               boxShadow: `inset 0 0 0 4px ${l.out ? '#8f93ad' : s.palette.tile}`,
               display: 'flex',
-              alignItems: 'center',
-              gap: 10,
+              flexDirection: 'column',
+              justifyContent: 'center',
+              gap: 8,
               padding: '0 18px',
               minWidth: 0,
               opacity: l.out ? staging.rivalOutOpacity : 1,
               transition: 'opacity 250ms',
             }}
           >
-            <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: '50%', background: s.palette.tile, boxShadow: '0 0 0 3px #1b1430' }} />
-            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-              <OutlinedText size={r.fontSize} shadow={null}>
-                {s.name}
-              </OutlinedText>
-            </span>
-            <OutlinedText size={r.fontSize} shadow={null} color={l.good ? '#ffd75a' : l.out ? '#c9c3e6' : '#ffffff'}>
-              {rv.cards ? `${rv.total} · ${l.text}` : l.text}
-            </OutlinedText>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <span style={{ width: 20, height: 20, flexShrink: 0, borderRadius: '50%', background: s.palette.tile, boxShadow: '0 0 0 3px #1b1430' }} />
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                <OutlinedText size={r.fontSize} shadow={null}>
+                  {s.name}
+                </OutlinedText>
+              </span>
+              <span key={l.text} style={{ animation: rv.status !== 'charging' ? 'pop-in 300ms ease-out both' : undefined }}>
+                <OutlinedText size={r.fontSize} shadow={null} color={l.color}>
+                  {l.text}
+                </OutlinedText>
+              </span>
+            </div>
+            <MiniGauge level={rv.level} jammed={rv.status === 'jammed'} />
           </div>
         );
       })}
@@ -358,27 +300,62 @@ function RivalChips({ ui, seats }: { ui: MatchUi; seats: SeatInfo[] }) {
   );
 }
 
-function HandRow({ ui }: { ui: MatchUi }) {
-  const H = D.hand;
-  const h = ui.hand!;
-  const s = H.cardScale;
-  const w = cardVisual.width * s;
-  const ch = cardVisual.height * s;
-  const step = cardVisual.overlap * s;
-  const n = Math.max(1, h.cards.length);
-  const groupW = w + (n - 1) * step + H.gap + H.totalSize;
-  const left = (stageFrame.width - groupW) / 2;
-  const cardTop = (H.height - ch) / 2;
-  const totalSkin = h.status === 'bust' ? 'red' : h.total >= bjCfg.minBonusTotal ? (h.total === bjCfg.target ? 'gold' : 'green') : 'grey';
-  const cardOrigin = (i: number) => ({
-    '--dx': `${D.dealFrom.x - (left + i * step + w / 2)}px`,
-    '--dy': `${D.dealFrom.y - (H.top + cardTop + ch / 2)}px`,
-    '--s': staging.dealFromDeckScale,
-  });
+/** Face-down pile the powder cards are drawn from, with the card range. */
+function Deck({ dealing }: { dealing: boolean }) {
+  const C = D.cards;
+  const s = C.cardScale * 0.9;
   return (
-    <div style={{ position: 'absolute', left, top: H.top, width: groupW, height: H.height, transition: 'left 200ms ease-out' }}>
-      {h.cards.map((c, i) => (
-        <PlayingCard
+    <div style={{ position: 'absolute', left: C.deckLeft, top: C.top, width: cardVisual.width * s + 16, height: C.height }}>
+      {[2, 1, 0].map((i) => (
+        <ChargeCard
+          key={i}
+          faceDown
+          scale={s}
+          style={{
+            position: 'absolute',
+            left: i * 5,
+            top: -i * 5,
+            transform: `rotate(${-4 + i * 3}deg)`,
+            animation: i === 0 && dealing ? 'deck-shake 0.3s ease-in-out infinite' : undefined,
+          }}
+        />
+      ))}
+      <div style={{ position: 'absolute', left: cardVisual.width * s + 34, top: 16, width: 120, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <OutlinedText size={40} color="#ffb347">
+          +{minCard} à +{maxCard}
+        </OutlinedText>
+        <span style={{ fontFamily: 'var(--font-title)', fontSize: C.deckLabelFontSize, color: '#a9adc8', letterSpacing: 1 }}>{copy.deckLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Hex badge colors for a level: zone color, white below the zones, red when jammed. */
+function levelSkin(level: number, jammed: boolean) {
+  if (jammed) return { fill: '#fb586c', hi: '#ffb3bd', rim: '#8a1122' };
+  const b = bonusByLevel[level];
+  if (b) return { fill: b.color, hi: '#ffffff', rim: b.dark };
+  return { fill: '#8f93ad', hi: '#c9cbe0', rim: '#4b4e66' };
+}
+
+function CardsRow({ ui }: { ui: MatchUi }) {
+  const C = D.cards;
+  const g = ui.gauge!;
+  const s = C.cardScale;
+  const w = cardVisual.width * s;
+  const h = cardVisual.height * s;
+  const n = Math.max(1, g.cards.length);
+  // cards spread out (values readable) and only overlap when the hand gets long
+  const room = C.areaRight - C.areaLeft - C.levelGap - C.levelSize - w;
+  const step = n > 1 ? Math.min(cardVisual.spread * s, room / (n - 1)) : 0;
+  const groupW = w + (n - 1) * step + C.levelGap + C.levelSize;
+  const left = C.areaLeft + (C.areaRight - C.areaLeft - groupW) / 2;
+  const deckX = C.deckLeft + (cardVisual.width * s * 0.9) / 2;
+  const jammed = g.status === 'jammed';
+  return (
+    <div style={{ position: 'absolute', left, top: C.top, width: groupW, height: C.height, transition: 'left 200ms ease-out' }}>
+      {g.cards.map((c, i) => (
+        <ChargeCard
           key={c.id}
           card={c}
           scale={s}
@@ -386,100 +363,51 @@ function HandRow({ ui }: { ui: MatchUi }) {
             {
               position: 'absolute',
               left: i * step,
-              top: cardTop,
-              transform: `rotate(${(i - (h.cards.length - 1) / 2) * 5}deg)`,
+              top: (C.height - h) / 2,
+              transform: `rotate(${(i - (g.cards.length - 1) / 2) * 4}deg)`,
+              transition: 'left 200ms ease-out',
               animation: `deal-from-deck ${cardVisual.dealFlightMs}ms cubic-bezier(.2,.9,.3,1.2) both`,
-              ...cardOrigin(i),
+              '--dx': `${deckX - (left + i * step + w / 2)}px`,
+              '--dy': '0px',
+              '--s': 0.9,
             } as CSSProperties
           }
         />
       ))}
       <HexBadge
-        key={`${h.total}-${h.status}`}
-        size={H.totalSize}
-        skin={totalSkin}
+        key={`${g.level}-${g.status}`}
+        size={C.levelSize}
+        colors={levelSkin(g.level, jammed)}
         style={{
           position: 'absolute',
-          left: w + (n - 1) * step + H.gap,
-          top: (H.height - H.totalSize) / 2,
-          animation: h.status === 'bust' ? 'shake-x 0.4s ease-out' : 'tick-pop 0.35s ease-out',
+          left: w + (n - 1) * step + C.levelGap,
+          top: (C.height - C.levelSize) / 2,
+          animation: jammed ? 'shake-x 0.4s ease-out' : `tick-pop 0.35s ease-out ${cardVisual.dealFlightMs * 0.6}ms both`,
         }}
       >
-        {h.total}
+        {g.level}
       </HexBadge>
     </div>
   );
 }
 
-function BonusChips({ ui, stage, flyTotal }: { ui: MatchUi; stage: PanelStage; flyTotal: number | null }) {
-  const c = D.chips;
-  const deciding = stage.kind === 'deciding';
+function LiveGauge({ ui }: { ui: MatchUi }) {
+  const G = D.gauge;
+  const g = ui.gauge!;
+  const resolved = g.phase === 'results' || g.phase === 'done';
   return (
-    <div
-      style={{
-        position: 'absolute',
-        left: c.left,
-        top: c.top,
-        width: c.width,
-        height: c.height,
-        display: 'grid',
-        gridTemplateColumns: `repeat(${TOTALS.length}, minmax(0, 1fr))`,
-        gap: c.gap,
-      }}
-    >
-      {TOTALS.map((t) => {
-        const st = chipState(t, ui, stage);
-        const lit = st === 'target' || st === 'won';
-        const jackpot = t === bjCfg.target;
-        const bonus = bonusByTotal[t];
-        return (
-          <div
-            key={t}
-            style={{
-              position: 'relative',
-              borderRadius: 22,
-              background: lit ? (jackpot ? 'linear-gradient(180deg,#ffe48a,#f2b52e 60%,#e39a25)' : 'linear-gradient(180deg,#7fd6ff,#2b8ff0)') : '#2b2f47',
-              boxShadow: lit
-                ? `0 0 0 5px #1b1430, inset 0 0 0 5px #ffd75a, 0 0 30px 8px ${jackpot ? 'rgba(255,214,80,0.75)' : 'rgba(140,255,120,0.7)'}`
-                : 'inset 0 0 0 4px #191c2e',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '0 12px',
-              opacity: st === 'dim' ? staging.chipDimOpacity : 1,
-              transform: lit ? `scale(${staging.chipTargetScale})` : 'none',
-              transition: 'opacity 200ms, transform 160ms ease-out, box-shadow 200ms',
-              animation: st === 'won' || flyTotal === t ? 'pulse 0.45s ease-in-out infinite' : undefined,
-            }}
-          >
-            <OutlinedText size={c.totalFontSize} color={jackpot && !lit ? '#ffd75a' : '#ffffff'}>
-              {t}
-            </OutlinedText>
-            <img src={bonusArt(bonus.id)} alt="" draggable={false} style={{ width: c.artSize, height: c.artSize, objectFit: 'contain', flexShrink: 0 }} />
-            <OutlinedText size={c.nameFontSize}>{bonus.name}</OutlinedText>
-            {deciding && st === 'target' && (
-              <span
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: -22,
-                  transform: 'translateX(-50%)',
-                  whiteSpace: 'nowrap',
-                  padding: '4px 14px 6px',
-                  borderRadius: 18,
-                  background: 'linear-gradient(180deg,#ffe48a,#f2b52e 60%,#e39a25)',
-                  boxShadow: '0 0 0 4px #1b1430',
-                  animation: 'pop-in 260ms ease-out both',
-                }}
-              >
-                <OutlinedText size={20} shadow={null} strokeWidth={3} stroke="#7a400d">
-                  {copy.targetTag}
-                </OutlinedText>
-              </span>
-            )}
-          </div>
-        );
-      })}
+    <div style={{ position: 'absolute', left: G.left, top: G.top }}>
+      <PowerGauge
+        width={G.width}
+        headerHeight={G.headerHeight}
+        barHeight={G.barHeight}
+        artSize={G.artSize}
+        nameFontSize={G.nameFontSize}
+        level={g.level}
+        status={g.status}
+        won={resolved ? g.outcome : undefined}
+        ghost={g.phase === 'deciding' && g.status === 'charging'}
+      />
     </div>
   );
 }
@@ -488,14 +416,16 @@ function ActionButton({
   color,
   title,
   sub,
+  subColor,
   onClick,
   callToAction,
   index,
   width,
 }: {
-  color: 'green' | 'red';
+  color: 'green' | 'orange';
   title: string;
   sub: string;
+  subColor?: string;
   onClick: () => void;
   callToAction: boolean;
   index: number;
@@ -510,7 +440,7 @@ function ActionButton({
             position: 'absolute',
             inset: '-8px -8px 0',
             borderRadius: 40,
-            boxShadow: `0 0 0 5px #ffffff, 0 0 34px 12px ${color === 'green' ? 'rgba(140,255,110,0.9)' : 'rgba(255,140,155,0.9)'}`,
+            boxShadow: `0 0 0 5px #ffffff, 0 0 34px 12px ${color === 'green' ? 'rgba(140,255,110,0.9)' : 'rgba(255,170,80,0.9)'}`,
             animation: 'halo-pulse 0.9s ease-in-out infinite',
           }}
         />
@@ -522,7 +452,7 @@ function ActionButton({
             <OutlinedText size={a.titleFontSize} shadow="#2a1640" stroke="#2a1640">
               {title}
             </OutlinedText>
-            <OutlinedText size={a.subFontSize} shadow={null} stroke="#2a1640" strokeWidth={3}>
+            <OutlinedText size={a.subFontSize} shadow={null} stroke="#2a1640" strokeWidth={3} color={subColor}>
               {sub}
             </OutlinedText>
           </span>
@@ -535,11 +465,11 @@ function ActionButton({
 function Result({ ui }: { ui: MatchUi }) {
   const a = D.actions;
   const R = D.result;
-  const h = ui.hand!;
-  const bonus = h.outcome !== null ? bonusByTotal[h.outcome] : null;
+  const g = ui.gauge!;
+  const bonus = g.outcome !== null ? bonusByLevel[g.outcome] : null;
   return (
     <div
-      key={h.status}
+      key={g.status}
       style={{
         position: 'absolute',
         left: a.left,
@@ -556,20 +486,29 @@ function Result({ ui }: { ui: MatchUi }) {
     >
       {bonus ? (
         <>
-          <OutlinedText size={R.titleFontSize} color={bonus.total === bjCfg.target ? '#ffd75a' : '#8cf06b'}>
-            {bonus.total === bjCfg.target ? copy.resultBlackjack : `${bonus.total} !`}
+          <OutlinedText size={R.titleFontSize} color={bonus.color}>
+            {g.full ? copy.resultFull : `${bonus.name.toUpperCase()} !`}
           </OutlinedText>
           <OutlinedText size={R.subFontSize}>
-            {bonus.name.toUpperCase()} {copy.resultUnlocked}
+            {g.full ? `${bonus.name.toUpperCase()} ${copy.resultReady}` : `Tir spécial ${copy.resultReady}`}
+          </OutlinedText>
+        </>
+      ) : g.status === 'jammed' ? (
+        <>
+          <OutlinedText size={R.titleFontSize} color="#ff8a98">
+            {copy.resultJam}
+          </OutlinedText>
+          <OutlinedText size={R.subFontSize} color="#d6caf7">
+            {copy.resultJamSub} {jamCfg.durationSec} s
           </OutlinedText>
         </>
       ) : (
         <>
-          <OutlinedText size={R.titleFontSize} color="#ff8a98">
-            {h.status === 'bust' ? copy.resultBust : copy.resultMissed}
+          <OutlinedText size={R.titleFontSize} color="#c9c3e6">
+            {copy.resultWeak}
           </OutlinedText>
           <OutlinedText size={R.subFontSize} color="#d6caf7">
-            {h.status === 'bust' ? `Plus de ${bjCfg.target} : pas de bonus` : `Moins de ${bjCfg.minBonusTotal} : pas de bonus`}
+            {copy.resultWeakSub} {chargeCfg.minZone}
           </OutlinedText>
         </>
       )}
@@ -577,44 +516,54 @@ function Result({ ui }: { ui: MatchUi }) {
   );
 }
 
-function OpenDrawer({
-  ui,
-  seats,
-  stage,
-  flyTotal,
-  onHit,
-  onStand,
-}: {
-  ui: MatchUi;
-  seats: SeatInfo[];
-  stage: PanelStage;
-  flyTotal: number | null;
-  onHit: () => void;
-  onStand: () => void;
-}) {
+function OpenDrawer({ ui, seats, stage, onLoad, onFire }: { ui: MatchUi; seats: SeatInfo[]; stage: PanelStage; onLoad: () => void; onFire: () => void }) {
   const a = D.actions;
   const btnW = (a.width - a.gap) / 2;
+  const g = ui.gauge;
+  const riskPct = stage.kind === 'deciding' ? Math.round(stage.risk * 100) : 0;
   return (
     <>
       <PromptBar ui={ui} stage={stage} />
       <RivalChips ui={ui} seats={seats} />
-      {ui.hand && <HandRow ui={ui} />}
-      <BonusChips ui={ui} stage={stage} flyTotal={flyTotal} />
+      <Deck dealing={stage.kind === 'dealing'} />
+      {g && <CardsRow ui={ui} />}
+      {g && <LiveGauge ui={ui} />}
       {stage.kind === 'deciding' && (
         <div style={{ position: 'absolute', left: a.left, top: a.top, display: 'flex', gap: a.gap }}>
-          <ActionButton index={0} width={btnW} color="green" title={copy.hitTitle} sub={stage.stand ? copy.hitRisky : copy.hitSafe} onClick={onHit} callToAction={!stage.stand} />
+          <ActionButton
+            index={0}
+            width={btnW}
+            color="green"
+            title={copy.loadTitle}
+            sub={riskPct === 0 ? copy.loadSafe : `${copy.loadRisk} ${riskPct} %`}
+            subColor={riskPct === 0 ? '#ffffff' : stage.risk >= staging.highRisk ? '#ff9aa6' : '#ffe36b'}
+            onClick={onLoad}
+            callToAction={!stage.fire}
+          />
           <ActionButton
             index={1}
             width={btnW}
-            color="red"
-            title={copy.standTitle}
-            sub={stage.stand ? `→ ${stage.stand.name}` : copy.standNoBonus}
-            onClick={onStand}
-            callToAction={!!stage.stand}
+            color="orange"
+            title={copy.fireTitle}
+            sub={stage.fire ? `→ ${stage.fire.name.toUpperCase()}` : copy.fireNone}
+            onClick={onFire}
+            callToAction={!!stage.fire}
           />
         </div>
       )}
-      {stage.kind === 'resolved' && ui.hand && <Result ui={ui} />}
+      {stage.kind === 'resolved' && g && <Result ui={ui} />}
+      {g?.status === 'jammed' && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: `${D.radius}px ${D.radius}px 0 0`,
+            background: 'radial-gradient(ellipse at center, rgba(255,59,82,0) 30%, rgba(255,59,82,0.6) 100%)',
+            animation: 'jam-flash 700ms ease-out forwards',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
     </>
   );
 }
@@ -624,18 +573,18 @@ function OpenDrawer({
 export function Drawer({
   ui,
   seats,
-  onHit,
-  onStand,
-  flyTotal,
+  onLoad,
+  onFire,
+  flyLevel,
 }: {
   ui: MatchUi;
   seats: SeatInfo[];
-  onHit: () => void;
-  onStand: () => void;
-  flyTotal: number | null;
+  onLoad: () => void;
+  onFire: () => void;
+  flyLevel: number | null;
 }) {
   const stage = panelStage(ui);
-  const open = handOnTable(stage);
+  const open = roundOn(stage);
   const closedShift = D.closedTop - D.openTop;
   const fade = `opacity ${D.contentFadeMs}ms ease-out`;
   return (
@@ -679,10 +628,10 @@ export function Drawer({
         />
 
         <div style={{ position: 'absolute', inset: 0, opacity: open ? 0 : 1, transition: fade }}>
-          <ClosedTray ui={ui} stage={stage} flyTotal={flyTotal} />
+          <ClosedTray ui={ui} stage={stage} flyLevel={flyLevel} />
         </div>
         <div style={{ position: 'absolute', inset: 0, opacity: open ? 1 : 0, transition: fade, pointerEvents: open ? 'auto' : 'none' }}>
-          {(open || ui.hand) && <OpenDrawer key={`deal-${ui.hand?.index ?? 'none'}`} ui={ui} seats={seats} stage={stage} flyTotal={flyTotal} onHit={onHit} onStand={onStand} />}
+          {(open || ui.gauge) && <OpenDrawer key={`round-${ui.gauge?.index ?? 'none'}`} ui={ui} seats={seats} stage={stage} onLoad={onLoad} onFire={onFire} />}
         </div>
       </div>
     </div>

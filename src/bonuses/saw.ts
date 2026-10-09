@@ -1,4 +1,4 @@
-// 18 — Saw: a spinning blade rolls in a straight line, bouncing on the walls, flipping every tile it crosses.
+// 7 — Saw: the cannon fires a spinning blade that rolls in a straight line, bouncing on the walls, flipping every tile it crosses.
 
 import { saw as cfg } from '../../config/bonuses';
 import { TAU } from '../util/math';
@@ -66,6 +66,7 @@ export class Saw implements BonusEntity {
     const c = sim.cannons[owner];
     const target = sim.grid.centroid(strongestOpponent(sim, owner)) ?? { x: sim.grid.x0 + sim.grid.width / 2, y: sim.grid.y0 + sim.grid.height / 2 };
     const a = Math.atan2(target.y - c.y, target.x - c.x) + sim.rng.range(-0.25, 0.25);
+    c.pointAt(a, 0.6);
     this.x = c.x + Math.cos(a) * 70;
     this.y = c.y + Math.sin(a) * 70;
     this.vx = Math.cos(a) * cfg.speed;

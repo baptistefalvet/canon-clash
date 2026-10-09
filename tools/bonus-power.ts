@@ -4,7 +4,7 @@ import { Match } from '../src/game/match';
 import { spawnBonus } from '../src/bonuses';
 import type { BonusId } from '../config/bonuses';
 
-const ids: BonusId[] = ['saw', 'turret', 'bombs', 'dragon'];
+const ids: BonusId[] = ['saw', 'gatling', 'bombs', 'dragon'];
 for (const id of ids) {
   const gains: number[] = [];
   for (let t = 0; t < 40; t++) {
@@ -15,7 +15,7 @@ for (const id of ids) {
     m.bonuses.push(spawnBonus(id, t % 4, m));
     let steps = 0;
     while (m.bonuses.length && steps++ < 30 * 30) m.update(1 / 30);
-    for (let k = 0; k < 90; k++) m.update(1 / 30); // let turret bullets land
+    for (let k = 0; k < 90; k++) m.update(1 / 30); // let gatling bullets land
     gains.push(m.grid.counts[t % 4] - start);
   }
   const mean = gains.reduce((a, b) => a + b, 0) / gains.length;

@@ -14,16 +14,19 @@ export function HexBadge({
   children,
   size = 76,
   skin = 'green',
+  colors,
   fontSize,
   style,
 }: {
   children: ReactNode;
   size?: number;
   skin?: keyof typeof SKINS;
+  /** Custom skin (e.g. a gauge zone color), overrides `skin`. */
+  colors?: { fill: string; hi: string; rim: string };
   fontSize?: number;
   style?: CSSProperties;
 }) {
-  const s = SKINS[skin];
+  const s = colors ?? SKINS[skin];
   const pts = Array.from({ length: 6 }, (_, i) => {
     const a = (Math.PI / 3) * i - Math.PI / 2;
     return `${50 + Math.cos(a) * 44},${50 + Math.sin(a) * 44}`;

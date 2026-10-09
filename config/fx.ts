@@ -8,6 +8,5 @@ export const fx = {
   maxParticles: 900,
   // Name tags drawn beside each cannon, on the board (the edge-to-edge board has no wall room).
   // offsetY pushes the tag toward the board edge, out of the barrel's sweep.
-  // handBubble: opponents' live blackjack total next to their tag (off: the drawer lists it)
-  nameTag: { fontSize: 26, padX: 14, height: 40, offsetX: 46, offsetY: 30, handBubble: false },
+  nameTag: { fontSize: 26, padX: 14, height: 40, offsetX: 46, offsetY: 30 },
 };

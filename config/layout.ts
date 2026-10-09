@@ -28,39 +28,36 @@ export const gameLayout = {
   // Round announce toast, over the top of the board (the drawer covers the bottom during a deal)
   toastTop: 420,
   drawer: {
-    closedTop: 1510, // collapsed: only the next-deal gauge + the bonus table show
-    openTop: 1080, // open during a deal: slides over the bottom of the board
+    closedTop: 1510, // collapsed: only the next-round bar + the gauge legend show
+    openTop: 1080, // open during a round: slides over the bottom of the board
     height: 840,
     radius: 44,
     slideMs: 420,
     contentFadeMs: 220,
     // collapsed content (relative to the drawer top)
-    gauge: { left: 26, top: 26, width: 1028, height: 92, barHeight: 68, badgeSize: 108, badgeFontSize: 50, fontSize: 34 },
-    // bonus table (« hand total → bonus »): flat read-only tiles, not buttons
-    legend: {
-      left: 26,
-      width: 1028,
-      captionTop: 134,
-      captionFontSize: 28,
-      top: 182,
-      height: 200,
-      gap: 16,
-      radius: 22,
-      artSize: 104,
-      nameFontSize: 30,
-      // the total is shown on a mini playing card so it reads as a hand total
-      card: { width: 62, height: 86, radius: 10, fontSize: 44, tiltDeg: -6 },
-    },
+    bar: { left: 26, top: 26, width: 1028, height: 92, barHeight: 68, badgeSize: 108, badgeFontSize: 50, fontSize: 34 },
+    // gauge legend (« fill the gauge → special shot »): the same gauge as in the round, read-only
+    legend: { left: 26, width: 1028, captionTop: 134, captionFontSize: 28, top: 176, headerHeight: 132, barHeight: 58, artSize: 84, nameFontSize: 28 },
     // open content (relative to the drawer top)
     handle: { top: 16, width: 100, height: 10 },
-    prompt: { left: 40, top: 44, width: 1000, height: 58, fontSize: 32 },
-    rivals: { left: 40, top: 126, width: 1000, height: 56, gap: 16, fontSize: 22 },
-    hand: { top: 222, height: 250, cardScale: 1.5, totalSize: 160, gap: 30 },
-    // cards fly in from above the drawer (the board side), in drawer coordinates
-    dealFrom: { x: 540, y: -160 },
-    chips: { left: 40, top: 500, width: 1000, height: 110, gap: 16, artSize: 64, totalFontSize: 38, nameFontSize: 24 },
-    actions: { left: 40, top: 650, width: 1000, height: 148, gap: 32, titleFontSize: 60, subFontSize: 26 },
-    // HIT / STAND are replaced by the hand's result once it is resolved
-    result: { titleFontSize: 64, subFontSize: 38 },
+    prompt: { left: 40, top: 40, width: 1000, height: 58, fontSize: 32 },
+    rivals: { left: 40, top: 116, width: 1000, height: 80, gap: 16, fontSize: 22, cellHeight: 16 },
+    // powder cards: the deck on the left, the drawn cards + the level badge centered in [areaLeft, areaRight]
+    cards: { top: 218, height: 170, cardScale: 1, deckLeft: 48, deckLabelFontSize: 24, areaLeft: 360, areaRight: 1040, levelSize: 150, levelGap: 26 },
+    gauge: { left: 40, width: 1000, top: 402, headerHeight: 112, barHeight: 112, artSize: 70, nameFontSize: 26 },
+    actions: { left: 40, top: 664, width: 1000, height: 148, gap: 32, titleFontSize: 60, subFontSize: 28 },
+    // CHARGER / FEU ! are replaced by the round's result once it is resolved
+    result: { titleFontSize: 66, subFontSize: 38 },
   },
+};
+
+// Power gauge geometry: cells are weighted so the shot zones are wide enough to carry their icon.
+export const gaugeShape = {
+  lowCellWeight: 1, // levels below the first zone
+  zoneCellWeight: 2.6,
+  jamCellWeight: 1.9, // the red « over the cap » cell at the end
+  cellGap: 6,
+  trackPad: 7, // dark track around the cells
+  radius: 16,
+  numberFontSize: 24,
 };

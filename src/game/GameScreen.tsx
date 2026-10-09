@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { bonusAnnounce } from '../../config/bonuses';
-import { blackjack as bjCfg } from '../../config/blackjack';
+import { charge as chargeCfg } from '../../config/charge';
 import { board } from '../../config/board';
 import { gameLayout, stage } from '../../config/layout';
 import { match as matchCfg } from '../../config/match';
@@ -16,7 +16,7 @@ import { OutlinedText } from '../ui/OutlinedText';
 import { sfx } from '../audio/sfx';
 import { bonusArt } from '../ui/bonusArt';
 import { Match } from './match';
-import { bonusForTotal, spawnBonus } from '../bonuses';
+import { bonusForLevel, spawnBonus } from '../bonuses';
 import { computeResult, finishMatch } from './result';
 import { snapshot } from './snapshot';
 import type { BonusInfo } from '../../config/bonuses';
@@ -41,17 +41,18 @@ export function GameScreen() {
   const [ui, setUi] = useState(() => snapshot(m));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
-  const [flyTotal, setFlyTotal] = useState<number | null>(null);
+  const [flyLevel, setFlyLevel] = useState<number | null>(null);
 
-  // Dev helpers: ?speed=N fast-forwards; keys 1–4 drop a bonus for you (18→21)
+  // Dev helpers: ?speed=N fast-forwards; keys 1–4 fire a special shot for you (Scie → Dragon)
   const devSpeed = devMode ? Math.max(1, Math.floor(Number(new URLSearchParams(window.location.search).get('speed')) || 1)) : 1;
   useEffect(() => {
     if (!devMode) return;
     const onKey = (e: KeyboardEvent) => {
-      const total = { '1': 18, '2': 19, '3': 20, '4': 21 }[e.key];
-      const info = total ? bonusForTotal(total) : null;
+      const k = Number(e.key);
+      const info = k >= 1 && k <= 4 ? bonusForLevel(chargeCfg.minZone + k - 1) : null;
       if (info && m.phase === 'playing') {
         m.bonuses.push(spawnBonus(info.id, m.humanSeat, m));
+        m.cannons[m.humanSeat].blast(m, info.color);
         m.events.push({ type: 'bonus', seat: m.humanSeat, bonus: info });
       }
     };
@@ -90,15 +91,15 @@ export function GameScreen() {
             break;
           case 'roundStart':
             setToast({
-              text: e.index === 0 ? `Blackjack ! Faites ${bjCfg.minBonusTotal} à ${bjCfg.target}` : `Donne ${e.index + 1}/${matchCfg.blackjackRounds}`,
+              text: e.index === 0 ? `Chargez votre canon ! Visez ${chargeCfg.minZone} à ${chargeCfg.cap}` : `Charge ${e.index + 1}/${matchCfg.chargeRounds}`,
               key: ++key,
             });
             break;
           case 'bonus':
             if (e.seat === m.humanSeat) {
-              setFlyTotal(e.bonus.total);
+              setFlyLevel(e.bonus.level);
               setOverlay({ kind: 'bonus', bonus: e.bonus, key: ++key });
-              timers.push(window.setTimeout(() => setFlyTotal(null), 700));
+              timers.push(window.setTimeout(() => setFlyLevel(null), 700));
             }
             break;
           case 'timeUp':
@@ -145,7 +146,7 @@ export function GameScreen() {
       />
 
       <TopHud seats={m.seats} ui={ui} humanSeat={m.humanSeat} />
-      <Drawer ui={ui} seats={m.seats} onHit={() => (sfx.hit(), m.humanHit())} onStand={() => m.humanStand()} flyTotal={flyTotal} />
+      <Drawer ui={ui} seats={m.seats} onLoad={() => m.humanLoad()} onFire={() => m.humanFire()} flyLevel={flyLevel} />
 
       {/* Board overlays */}
       {overlay?.kind === 'count' && (
@@ -173,7 +174,7 @@ export function GameScreen() {
           }}
         >
           <img src={bonusArt(overlay.bonus.id)} alt="" style={{ width: 260, filter: 'drop-shadow(0 10px 0 rgba(0,0,0,0.3))' }} />
-          <OutlinedText size={overlay.bonus.total === 21 ? 150 : 120} color={overlay.bonus.total === 21 ? '#ffd75a' : '#ffffff'} strokeWidth={16} shadowOffset={12}>
+          <OutlinedText size={overlay.bonus.level === chargeCfg.cap ? 150 : 120} color={overlay.bonus.color} strokeWidth={16} shadowOffset={12}>
             {overlay.bonus.name.toUpperCase()} !
           </OutlinedText>
         </div>

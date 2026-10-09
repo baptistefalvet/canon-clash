@@ -15,6 +15,19 @@ export const cannon = {
     barrelWidth: 24,
     barrelLength: 56,
   },
+  // Segmented charge ring drawn around the cannon during a charge round (one segment per level)
+  chargeRing: {
+    radius: 52,
+    width: 11,
+    arcDeg: 300, // open at the side facing the board edge
+    gapDeg: 4,
+    emptyColor: 'rgba(20,12,40,0.55)',
+    lowColor: '#ffffff', // levels below the first zone
+    jamColor: '#ff3b52',
+  },
+  // Aim blend when a special shot (Mitraille) takes over the barrel
+  aimBlendSec: 0.25,
+  gatlingBarrelLength: 66,
 };
 
 export const bullet = {

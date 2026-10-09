@@ -58,24 +58,37 @@ export const sfx = {
     lastCapture = now;
     tone(1200 + Math.random() * 500, 0.05, { type: 'sine', vol: 0.12 });
   },
-  deal() {
-    burst(0.12, { freq: 3200, q: 0.8, vol: 0.25, slideTo: 1200 });
+  /** Powder poured into the gauge: pitch climbs with the level, so the danger is heard. */
+  charge(level: number, cap: number) {
+    const k = Math.min(1.2, level / cap);
+    const f = 300 * Math.pow(2, k * 1.6);
+    tone(f, 0.12, { type: 'triangle', vol: 0.28, slideTo: f * 1.5 });
+    burst(0.1, { freq: 2200 + k * 2000, q: 1.2, vol: 0.14, delay: 0.02 });
   },
-  flip() {
-    burst(0.06, { freq: 4500, q: 1.5, vol: 0.2 });
+  /** Entering a special-shot zone. */
+  zone(level: number, minZone: number) {
+    const base = 659.25 * Math.pow(2, ((level - minZone) * 3) / 12);
+    tone(base, 0.12, { type: 'square', vol: 0.14 });
+    tone(base * 1.5, 0.18, { type: 'square', vol: 0.12, delay: 0.06 });
   },
-  hit() {
-    tone(520, 0.08, { type: 'triangle', vol: 0.3, slideTo: 700 });
+  /** FEU ! pressed: locked in. */
+  lock() {
+    tone(392, 0.09, { type: 'square', vol: 0.22 });
+    tone(784, 0.16, { type: 'square', vol: 0.2, delay: 0.07 });
   },
-  stand() {
-    tone(660, 0.1, { type: 'triangle', vol: 0.3 });
-    tone(520, 0.12, { type: 'triangle', vol: 0.25, delay: 0.08 });
+  /** Special shot leaving the barrel. */
+  blast() {
+    burst(0.45, { type: 'lowpass', freq: 2200, slideTo: 120, vol: 0.6 });
+    tone(140, 0.35, { type: 'sine', vol: 0.5, slideTo: 45 });
   },
-  bust() {
-    tone(320, 0.35, { type: 'sawtooth', vol: 0.2, slideTo: 90 });
+  /** Overloaded cannon: clank + steam hiss. */
+  jam() {
+    tone(180, 0.12, { type: 'square', vol: 0.3, slideTo: 120 });
+    tone(140, 0.2, { type: 'square', vol: 0.25, delay: 0.1, slideTo: 70 });
+    burst(0.9, { freq: 5200, q: 0.6, vol: 0.22, delay: 0.12, slideTo: 2500 });
   },
-  good(total: number) {
-    const base = 523.25 * Math.pow(2, (total - 18) / 12 * 2);
+  good(level: number, minZone: number) {
+    const base = 523.25 * Math.pow(2, ((level - minZone) * 2) / 12);
     [0, 4, 7, 12].forEach((s, i) => tone(base * Math.pow(2, s / 12), 0.16, { type: 'square', vol: 0.16, delay: i * 0.07 }));
   },
   tick() {
@@ -91,8 +104,9 @@ export const sfx = {
   saw() {
     tone(180, 0.6, { type: 'sawtooth', vol: 0.08, slideTo: 260 });
   },
-  turret() {
+  gatling() {
     tone(300, 0.25, { type: 'square', vol: 0.15, slideTo: 600 });
+    for (let i = 0; i < 6; i++) burst(0.04, { freq: 2800, q: 2, vol: 0.14, delay: 0.25 + i * 0.07 });
   },
   dragon() {
     burst(1.1, { type: 'lowpass', freq: 600, slideTo: 2400, vol: 0.4 });

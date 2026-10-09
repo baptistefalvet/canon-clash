@@ -1,4 +1,5 @@
-// 21 — Dragon: flies a sinuous path over enemy land, breathing fire and flipping a wide swath of tiles.
+// 10 — Dragon: leaves the cannon as a giant fireball, unfolds into a dragon and flies a sinuous path over enemy land,
+// breathing fire and flipping a wide swath of tiles.
 
 import { dragon as cfg } from '../../config/bonuses';
 import { TAU, angleDiff, clamp, deg } from '../util/math';
@@ -211,17 +212,32 @@ export class Dragon implements BonusEntity {
   private target: Pt;
   private breath = 0;
 
+  /** Fireball phase: true until the dragon unfolds. */
+  private hatching = true;
+
   constructor(readonly owner: number, sim: Sim) {
     const g = sim.grid;
     const c = sim.cannons[owner];
-    const out = 90;
-    this.x = c.x - Math.cos(c.midAngle) * out;
-    this.y = c.y - Math.sin(c.midAngle) * out;
+    c.pointAt(c.midAngle, 0.6);
+    this.x = c.muzzleX;
+    this.y = c.muzzleY;
     this.heading = c.midAngle;
     this.target = { x: g.x0 + g.width / 2, y: g.y0 + g.height / 2 };
+  }
+
+  private hatch(sim: Sim) {
+    this.hatching = false;
+    this.age = 0;
+    this.trail = [];
     for (let i = 0; i < cfg.segments * cfg.segmentSpacing; i += 4) {
-      this.trail.push({ x: this.x - Math.cos(this.heading) * i, y: this.y - Math.sin(this.heading) * i });
+      this.trail.push({ x: this.x - Math.cos(this.heading) * i * 0.2, y: this.y - Math.sin(this.heading) * i * 0.2 });
     }
+    const p = sim.palettes[this.owner];
+    sim.particles.flash(this.x, this.y - FLY_HEIGHT, 160, p.light);
+    sim.particles.ring(this.x, this.y - FLY_HEIGHT, 170, '#ffffff', 0.5);
+    sim.particles.ring(this.x, this.y - FLY_HEIGHT, 120, '#ffc631', 0.6);
+    sim.particles.sparks(this.x, this.y - FLY_HEIGHT, '#ffe36b', 26, 640);
+    sim.shake(8);
   }
 
   private pickTarget(sim: Sim) {
@@ -248,6 +264,25 @@ export class Dragon implements BonusEntity {
   update(dt: number, sim: Sim) {
     const g = sim.grid;
     this.age += dt;
+    if (this.hatching) {
+      this.x += Math.cos(this.heading) * cfg.fireballSpeed * dt;
+      this.y += Math.sin(this.heading) * cfg.fireballSpeed * dt;
+      if (sim.rng.next() < 0.8) {
+        sim.particles.add({
+          kind: 'fire',
+          x: this.x,
+          y: this.y - FLY_HEIGHT * Math.min(1, this.age / cfg.fireballSec),
+          vx: sim.rng.range(-60, 60),
+          vy: sim.rng.range(-60, 60),
+          life: 0.3,
+          size: sim.rng.range(16, 26),
+          color: '#ffb02e',
+          color2: 'rgba(255,255,255,0)',
+        });
+      }
+      if (this.age >= cfg.fireballSec) this.hatch(sim);
+      return;
+    }
     const exiting = this.age > cfg.durationSec;
 
     if (exiting) {
@@ -332,6 +367,26 @@ export class Dragon implements BonusEntity {
   }
 
   draw(ctx: CanvasRenderingContext2D, sim: Sim) {
-    drawDragon(ctx, this.segments(), this.heading, this.age, sim.palettes[this.owner], cfg.scale);
+    if (this.hatching) {
+      const k = Math.min(1, this.age / cfg.fireballSec);
+      const r = cfg.fireballRadius * (0.5 + 0.5 * k);
+      const z = FLY_HEIGHT * k;
+      ctx.fillStyle = 'rgba(10,0,30,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(this.x + 10, this.y + 12, r, r * 0.5, 0, 0, TAU);
+      ctx.fill();
+      const fg = ctx.createRadialGradient(this.x - r * 0.3, this.y - z - r * 0.3, r * 0.1, this.x, this.y - z, r * 1.4);
+      fg.addColorStop(0, '#ffffff');
+      fg.addColorStop(0.3, '#fff0a0');
+      fg.addColorStop(0.6, '#ffb02e');
+      fg.addColorStop(1, 'rgba(255,90,40,0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - z, r * 1.4, 0, TAU);
+      ctx.fill();
+      return;
+    }
+    const grow = Math.min(1, 0.35 + this.age / 0.35);
+    drawDragon(ctx, this.segments(), this.heading, this.age, sim.palettes[this.owner], cfg.scale * grow);
   }
 }

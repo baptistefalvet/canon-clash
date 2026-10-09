@@ -1,4 +1,4 @@
-// 20 — Bombs: a salvo lobbed from the owner's cannon onto enemy land; each blast flips a disc of tiles.
+// 9 — Obus: a salvo lobbed from the owner's cannon onto enemy land; each blast flips a disc of tiles.
 
 import { bombs as cfg } from '../../config/bonuses';
 import { fx } from '../../config/fx';
@@ -14,6 +14,7 @@ interface Bomb {
   ty: number;
   delay: number;
   t: number;
+  launched: boolean;
   exploded: boolean;
 }
 
@@ -80,9 +81,10 @@ export class BombStrike implements BonusEntity {
       if (targets.every((t) => Math.hypot(t.x - x, t.y - y) >= minD)) targets.push({ x, y });
     }
     targets.forEach((t, k) => {
-      this.bombs.push({ sx: c.x, sy: c.y - 10, tx: t.x, ty: t.y, delay: k * cfg.staggerSec, t: 0, exploded: false });
+      this.bombs.push({ sx: c.x, sy: c.y - 10, tx: t.x, ty: t.y, delay: k * cfg.staggerSec, t: 0, launched: false, exploded: false });
     });
     if (this.bombs.length === 0) this.done = true;
+    else c.pointAt(Math.atan2(this.bombs[0].ty - c.y, this.bombs[0].tx - c.x), cfg.staggerSec);
   }
 
   update(dt: number, sim: Sim) {
@@ -92,6 +94,14 @@ export class BombStrike implements BonusEntity {
       if (b.exploded) continue;
       alive = true;
       if (this.age < b.delay) continue;
+      if (!b.launched) {
+        // each shell leaves the barrel: aim, kick, puff
+        b.launched = true;
+        const c = sim.cannons[this.owner];
+        c.pointAt(Math.atan2(b.ty - c.y, b.tx - c.x), cfg.staggerSec + 0.1);
+        c.kick();
+        sim.particles.smoke(c.muzzleX, c.muzzleY, 2);
+      }
       b.t += dt / cfg.flightSec;
       if (b.t >= 1) {
         b.exploded = true;

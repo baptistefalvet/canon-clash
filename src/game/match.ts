@@ -1,8 +1,7 @@
-// Match orchestration: countdown → territory war with periodic blackjack deals → time up.
-// Pure simulation + canvas drawing; React only reads snapshots and forwards the human's HIT/STAND.
+// Match orchestration: countdown → territory war with periodic cannon charge rounds → time up.
+// Pure simulation + canvas drawing; React only reads snapshots and forwards the human's CHARGER / FEU !
 
-import { blackjack as bjCfg } from '../../config/blackjack';
-import { bonusAnnounce } from '../../config/bonuses';
+import { charge as chargeCfg, shotTiming } from '../../config/charge';
 import { board } from '../../config/board';
 import { fx } from '../../config/fx';
 import { match as cfg } from '../../config/match';
@@ -14,8 +13,8 @@ import { drawEdgeShadow, drawTiles } from '../board/render';
 import { Bullets } from '../bullets/bullets';
 import { Cannon } from '../cannon/cannon';
 import { Particles } from '../fx/particles';
-import { BlackjackRound, type HandStatus } from '../blackjack/round';
-import { bonusForTotal, spawnBonus } from '../bonuses';
+import { ChargeRound, type GaugeStatus } from '../charge/round';
+import { bonusForLevel, spawnBonus } from '../bonuses';
 import type { BonusEntity } from '../bonuses/types';
 import type { BonusInfo } from '../../config/bonuses';
 import { TAU } from '../util/math';
@@ -33,16 +32,18 @@ export interface SeatInfo {
   isHuman: boolean;
   corner: Corner;
   palette: TeamPalette;
-  standOn: number;
+  /** Bots fire as soon as their gauge reaches this level. */
+  fireAt: number;
 }
 
 export type MatchEvent =
   | { type: 'countdown'; value: number }
   | { type: 'go' }
   | { type: 'roundStart'; index: number }
-  | { type: 'card'; seat: number }
-  | { type: 'resolved'; seat: number; status: HandStatus; total: number }
+  | { type: 'card'; seat: number; level: number }
+  | { type: 'resolved'; seat: number; status: GaugeStatus; level: number }
   | { type: 'bonus'; seat: number; bonus: BonusInfo }
+  | { type: 'jam'; seat: number }
   | { type: 'timeUp' }
   | { type: 'over' };
 
@@ -64,14 +65,14 @@ export class Match implements Sim {
   phase: MatchPhase = 'countdown';
   phaseTime = 0;
   bonuses: BonusEntity[] = [];
-  round: BlackjackRound | null = null;
+  round: ChargeRound | null = null;
   roundsStarted = 0;
-  /** Last blackjack outcome per seat (total or null), kept until the next deal. */
+  /** Last charge outcome per seat (level or null), kept until the next round. */
   lastOutcome: (number | null)[];
   readonly events: MatchEvent[] = [];
   private shakeAmt = 0;
   private lastCountdown = -1;
-  private pendingBonuses: { seat: number; total: number; at: number }[] = [];
+  private pendingShots: { seat: number; level: number; at: number }[] = [];
 
   constructor(profiles: { name: string; avatar: number; isHuman: boolean }[], seed?: number) {
     this.rng = new Rng(seed);
@@ -88,7 +89,7 @@ export class Match implements Sim {
       isHuman: profiles[seat].isHuman,
       corner: s.corner,
       palette: this.palettes[seat],
-      standOn: this.rng.pick(bjCfg.botStandOnChoices),
+      fireAt: this.rng.pick(chargeCfg.botFireAtChoices),
     }));
     this.humanSeat = Math.max(0, this.seats.findIndex((s) => s.isHuman));
     this.cannons = this.seats.map((s) => new Cannon(s.seat, s.corner, this.grid, this.rng.range(0, TAU)));
@@ -101,14 +102,14 @@ export class Match implements Sim {
   }
 
   // ---- Human input ----
-  humanHit() {
+  humanLoad() {
     if (!this.round) return;
-    this.round.hit(this.humanSeat);
+    this.round.load(this.humanSeat);
   }
 
-  humanStand() {
+  humanFire() {
     if (!this.round) return;
-    this.round.stand(this.humanSeat);
+    this.round.fire(this.humanSeat);
   }
 
   get timeLeft() {
@@ -116,7 +117,7 @@ export class Match implements Sim {
   }
 
   get nextRoundAt(): number | null {
-    if (this.roundsStarted >= cfg.blackjackRounds) return null;
+    if (this.roundsStarted >= cfg.chargeRounds) return null;
     return cfg.firstRoundAtSec + this.roundsStarted * cfg.roundIntervalSec;
   }
 
@@ -163,7 +164,8 @@ export class Match implements Sim {
           this.bullets.items = [];
           this.bonuses = [];
           this.round = null;
-          this.pendingBonuses = [];
+          this.pendingShots = [];
+          this.cannons.forEach((c) => (c.gauge = null));
           this.setPhase('ending');
           this.events.push({ type: 'timeUp' });
         }
@@ -195,9 +197,9 @@ export class Match implements Sim {
   private updateRounds(dt: number) {
     const due = this.nextRoundAt;
     if (!this.round && due !== null && this.time >= due) {
-      this.round = new BlackjackRound(
+      this.round = new ChargeRound(
         this.roundsStarted,
-        this.seats.map((s) => ({ isHuman: s.isHuman, standOn: s.standOn })),
+        this.seats.map((s) => ({ isHuman: s.isHuman, fireAt: s.fireAt })),
         this.rng,
       );
       this.roundsStarted++;
@@ -206,42 +208,65 @@ export class Match implements Sim {
     }
 
     if (this.round) {
-      this.round.update(dt);
-      for (const e of this.round.events.splice(0)) {
+      const round = this.round;
+      round.update(dt);
+      for (const e of round.events.splice(0)) {
         if (e.type === 'card') {
           this.events.push(e);
-          if (e.seat === this.humanSeat) sfx.deal();
+          if (e.seat === this.humanSeat) {
+            sfx.charge(e.level, chargeCfg.cap);
+            if (bonusForLevel(e.level)) sfx.zone(e.level, chargeCfg.minZone);
+          }
         } else if (e.type === 'resolved') {
           this.events.push(e);
-          this.lastOutcome[e.seat] = this.round.outcome(e.seat);
+          this.lastOutcome[e.seat] = round.outcome(e.seat);
           if (e.seat === this.humanSeat) {
-            const out = this.round.outcome(e.seat);
-            if (out !== null) sfx.good(out);
-            else if (e.status === 'bust') sfx.bust();
-            else sfx.stand();
+            if (e.status === 'jammed') sfx.jam();
+            else sfx.lock();
           }
         }
       }
-      if (this.round.phase === 'done') {
-        // Bonuses play automatically, the human's first with a short announce for readability
-        this.seats.forEach((s) => {
-          const total = this.round!.outcome(s.seat);
-          if (total !== null) this.pendingBonuses.push({ seat: s.seat, total, at: this.time + (s.isHuman ? bonusAnnounce.cardFlySec : 0) });
+      // The cannons wear their live gauge on the board
+      for (const g of round.gauges) this.cannons[g.seat].gauge = { level: g.level, status: g.status };
+
+      if (round.phase === 'done') {
+        // Jams hit at once; shots go off one by one: the human first, alone, then the rivals in a random order
+        // (a fixed order would favour the last shooter: its gains are never overwritten).
+        let rivalSlot = 0;
+        this.rng.shuffle([...this.seats]).forEach((s) => {
+          const c = this.cannons[s.seat];
+          const g = round.gauges[s.seat];
+          const level = round.outcome(s.seat);
+          if (g.status === 'jammed') {
+            c.gauge = null;
+            c.jam(this);
+            this.particles.text(c.x + Math.cos(c.midAngle) * 120, c.y + Math.sin(c.midAngle) * 120, 'ENRAYÉ !', '#ff8a98', 44, 1.4);
+            this.events.push({ type: 'jam', seat: s.seat });
+            if (!s.isHuman) sfx.jam();
+          } else if (level === null) {
+            c.gauge = null;
+          } else {
+            const at = s.isHuman ? shotTiming.humanDelaySec : shotTiming.rivalsDelaySec + rivalSlot++ * shotTiming.rivalStaggerSec;
+            this.pendingShots.push({ seat: s.seat, level, at: this.time + at });
+          }
         });
         this.round = null;
       }
     }
 
-    for (let i = this.pendingBonuses.length - 1; i >= 0; i--) {
-      const p = this.pendingBonuses[i];
+    for (let i = this.pendingShots.length - 1; i >= 0; i--) {
+      const p = this.pendingShots[i];
       if (this.time < p.at) continue;
-      this.pendingBonuses.splice(i, 1);
-      const info = bonusForTotal(p.total);
+      this.pendingShots.splice(i, 1);
+      const info = bonusForLevel(p.level);
+      const c = this.cannons[p.seat];
+      c.gauge = null;
       if (!info) continue;
       this.bonuses.push(spawnBonus(info.id, p.seat, this));
+      c.blast(this, info.color);
+      sfx.blast();
       this.events.push({ type: 'bonus', seat: p.seat, bonus: info });
-      const c = this.cannons[p.seat];
-      this.particles.text(c.x + Math.cos(c.midAngle) * 120, c.y + Math.sin(c.midAngle) * 120, `${info.name.toUpperCase()} !`, this.palettes[p.seat].light, 46, 1.4);
+      this.particles.text(c.x + Math.cos(c.midAngle) * 120, c.y + Math.sin(c.midAngle) * 120, `${info.name.toUpperCase()} !`, info.color, 46, 1.4);
     }
   }
 

@@ -2,14 +2,16 @@
 // Every number shown comes from the config modules.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { blackjack as bjCfg } from '../../config/blackjack';
-import { bonusByTotal } from '../../config/bonuses';
+import { bonusByLevel } from '../../config/bonuses';
+import { charge as chargeCfg, jam as jamCfg } from '../../config/charge';
 import { economy } from '../../config/economy';
 import { match as matchCfg } from '../../config/match';
 import { seats, teams } from '../../config/players';
 import { navigate } from '../app/store';
 import { Avatar } from '../avatar/Avatar';
-import { PlayingCard } from '../blackjack/PlayingCard';
+import { maxCard, minCard } from '../charge/cards';
+import { ChargeCard } from '../charge/ChargeCard';
+import { PowerGauge } from '../charge/PowerGauge';
 import { BonusCard } from '../hud/BonusCard';
 import { SettingsGlyph } from '../purse/PurseOverlay';
 import { formatEuros } from '../purse/format';
@@ -21,6 +23,11 @@ import { FdjPanel, SectionTitle, TitleBadge } from '../ui/FdjPanel';
 import { HexBadge } from '../ui/HexBadge';
 import { OutlinedText } from '../ui/OutlinedText';
 import { Ribbon } from '../ui/Ribbon';
+
+/** Cards of the « La charge » example, and the level they make. */
+const RULES_DEMO_CARDS = [3, 4];
+const RULES_DEMO_LEVEL = RULES_DEMO_CARDS.reduce((a, b) => a + b, 0);
+const RULES_GAUGE_WIDTH = 760;
 
 const PANEL = { left: 42, top: 344, width: 1011, height: 1200 };
 const TRACK = { left: 985 - PANEL.left - 22, top: 175, height: 960 };
@@ -120,46 +127,65 @@ export function RulesScreen() {
             </p>
           </div>
 
-          {/* 2 La donne */}
+          {/* 2 La charge */}
           <div className="fdj-section">
             <SectionTitle badge={<TitleBadge kind="gold">2</TitleBadge>}>
-              <H>La donne</H>
+              <H>La charge</H>
             </SectionTitle>
-            <div className="felt" style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 26 }}>
-              <div style={{ position: 'relative', width: 190, height: 170 }}>
-                <PlayingCard card={{ rank: '10', suit: '♠', id: -10 }} style={{ position: 'absolute', left: 0, top: 6, transform: 'rotate(-6deg)' }} />
-                <PlayingCard card={{ rank: '9', suit: '♥', id: -11 }} style={{ position: 'absolute', left: 70, top: 0, transform: 'rotate(5deg)' }} />
+            <div className="felt" style={{ padding: '26px 24px 30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
+                <div style={{ position: 'relative', width: 236, height: 170 }}>
+                  <ChargeCard card={{ value: RULES_DEMO_CARDS[0], id: -10 }} style={{ position: 'absolute', left: 0, top: 6, transform: 'rotate(-6deg)' }} />
+                  <ChargeCard card={{ value: RULES_DEMO_CARDS[1], id: -11 }} style={{ position: 'absolute', left: 122, top: 0, transform: 'rotate(5deg)' }} />
+                </div>
+                <OutlinedText size={70}>=</OutlinedText>
+                <HexBadge size={120} skin="green">
+                  {RULES_DEMO_LEVEL}
+                </HexBadge>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginLeft: 10 }}>
+                  <MiniButton variant="green" text="CHARGER" />
+                  <MiniButton variant="orange" text="FEU !" />
+                </div>
               </div>
-              <OutlinedText size={70}>=</OutlinedText>
-              <HexBadge size={130}>19</HexBadge>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <MiniButton variant="green" text="CARTE" />
-                <MiniButton variant="red" text="RESTER" />
-              </div>
+              <PowerGauge width={RULES_GAUGE_WIDTH} headerHeight={96} barHeight={60} artSize={52} nameFontSize={22} level={RULES_DEMO_LEVEL} status="charging" />
             </div>
             <p className="fdj-text" style={{ margin: '26px 6px 0' }}>
-              Toutes les <b>{matchCfg.roundIntervalSec} secondes</b>, une main de Blackjack est distribuée en bas de l’écran ({matchCfg.blackjackRounds} donnes
-              par partie). Tirez une <b>CARTE</b> ou <b>RESTEZ</b> pour approcher <b>{bjCfg.target}</b> sans le dépasser. Vous avez{' '}
-              <b>{bjCfg.decisionTimeSec} secondes</b> pour décider.
+              Toutes les <b>{matchCfg.roundIntervalSec} secondes</b>, chargez votre canon ({matchCfg.chargeRounds} charges par partie). Chaque <b>CARTE</b> de poudre
+              remplit la jauge de <b>+{minCard} à +{maxCard}</b>. Appuyez sur <b>FEU !</b> pour tirer : plus la jauge est haute, plus le tir est puissant. Vous avez{' '}
+              <b>{chargeCfg.decisionTimeSec} secondes</b> pour décider.
             </p>
           </div>
 
-          {/* 3 Les bonus */}
+          {/* 3 Attention */}
           <div className="fdj-section">
             <SectionTitle badge={<TitleBadge kind="gold">3</TitleBadge>}>
-              <H>Les bonus</H>
+              <H>Gare à l’enrayage !</H>
+            </SectionTitle>
+            <div className="felt" style={{ padding: '26px 24px 30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+              <PowerGauge width={RULES_GAUGE_WIDTH} headerHeight={96} barHeight={60} artSize={52} nameFontSize={22} level={chargeCfg.cap + 1} status="jammed" />
+            </div>
+            <p className="fdj-text" style={{ margin: '26px 6px 0' }}>
+              Si la jauge dépasse <b>{chargeCfg.cap}</b>, votre canon s’<b>enraye</b> : pas de tir spécial, et il ne tire plus du tout pendant{' '}
+              <b>{jamCfg.durationSec} secondes</b> ! Le bouton <b>CHARGER</b> affiche toujours le <b>risque</b> d’enrayer avec la carte suivante.
+            </p>
+          </div>
+
+          {/* 4 Les tirs spéciaux */}
+          <div className="fdj-section">
+            <SectionTitle badge={<TitleBadge kind="gold">4</TitleBadge>}>
+              <H>Les tirs spéciaux</H>
             </SectionTitle>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
-              {[18, 19, 20, 21].map((t) => {
-                const b = bonusByTotal[t];
+              {Object.values(bonusByLevel).map((b) => {
+                const jackpot = b.level === chargeCfg.cap;
                 return (
-                  <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 30 }}>
+                  <div key={b.level} style={{ display: 'flex', alignItems: 'center', gap: 30 }}>
                     <div style={{ transform: 'scale(0.72)', transformOrigin: 'left center', width: 196 * 0.72, height: 210 * 0.72 + 20 }}>
-                      <BonusCard bonus={b} width={196} height={210} state={t === 21 ? 'target' : 'idle'} />
+                      <BonusCard bonus={b} width={196} height={210} state={jackpot ? 'target' : 'idle'} />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <OutlinedText size={46} color={t === 21 ? '#ffd75a' : '#ffffff'} strokeWidth={5} shadowOffset={3}>
-                        {t} · {b.name}
+                      <OutlinedText size={46} color={b.color} strokeWidth={5} shadowOffset={3}>
+                        {b.level} · {b.name}
                       </OutlinedText>
                       <div className="fdj-text" style={{ fontSize: 32, lineHeight: 1.3, marginTop: 6 }}>
                         {b.description}
@@ -170,14 +196,14 @@ export function RulesScreen() {
               })}
             </div>
             <p className="fdj-text" style={{ margin: '26px 6px 0' }}>
-              Les bonus se jouent <b>automatiquement</b> juste après la donne. Au-dessus de {bjCfg.target} ou en dessous de {bjCfg.minBonusTotal} :
-              pas de bonus. Le <b>{bjCfg.target}</b> débloque le Dragon, de loin le plus puissant !
+              Le tir part de <b>votre canon</b> juste après la charge. En dessous de {chargeCfg.minZone} : pas de tir spécial. Jauge pleine (
+              <b>{chargeCfg.cap}</b>) : le Dragon, de loin le plus puissant !
             </p>
           </div>
 
-          {/* 4 Les gains */}
+          {/* 5 Les gains */}
           <div className="fdj-section">
-            <SectionTitle badge={<TitleBadge kind="gold">4</TitleBadge>}>
+            <SectionTitle badge={<TitleBadge kind="gold">5</TitleBadge>}>
               <H>Les gains</H>
             </SectionTitle>
             <div className="felt" style={{ padding: '30px 40px', display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -235,7 +261,7 @@ export function RulesScreen() {
   );
 }
 
-function MiniButton({ variant, text }: { variant: 'green' | 'red'; text: string }) {
+function MiniButton({ variant, text }: { variant: 'green' | 'orange'; text: string }) {
   return (
     <div className={`btn3d btn-${variant}`} style={{ width: 190, height: 92, pointerEvents: 'none' }}>
       <span className="btn3d-depth" style={{ borderRadius: 24 }} />

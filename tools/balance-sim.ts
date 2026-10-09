@@ -20,7 +20,7 @@ for (let m = 0; m < N; m++) {
     1000 + m,
   );
   const bonusPoints = [0, 0, 0, 0];
-  const weights: Record<string, number> = { saw: 1, turret: 2, bombs: 3, dragon: 5 };
+  const weights: Record<string, number> = { saw: 1, gatling: 2, bombs: 3, dragon: 5 };
   // track gain of each bonus: count captures attributed while bonus active is hard; measure share delta over 10s after spawn
   const pending: { seat: number; id: string; start: number; at: number }[] = [];
   let lastSample = -1;

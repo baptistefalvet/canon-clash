@@ -1,6 +1,7 @@
-// Color Clash-style unit card: framed blue card, hex pattern, artwork and the blackjack total badge.
+// Color Clash-style unit card: framed blue card, hex pattern, artwork and the charge level badge.
 
 import type { BonusInfo } from '../../config/bonuses';
+import { charge as chargeCfg } from '../../config/charge';
 import { bonusArt } from '../ui/bonusArt';
 import { HexBadge } from '../ui/HexBadge';
 
@@ -22,7 +23,7 @@ export function BonusCard({
   state: CardState;
   style?: React.CSSProperties;
 }) {
-  const jackpot = bonus.total === 21;
+  const jackpot = bonus.level === chargeCfg.cap;
   const dim = state === 'dim';
   const lit = state === 'target' || state === 'won';
   return (
@@ -106,7 +107,7 @@ export function BonusCard({
         skin={dim ? 'grey' : jackpot ? 'gold' : 'green'}
         style={{ position: 'absolute', left: '50%', bottom: -34, transform: 'translateX(-50%)' }}
       >
-        {bonus.total}
+        {bonus.level}
       </HexBadge>
     </div>
   );

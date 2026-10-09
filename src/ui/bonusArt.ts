@@ -5,7 +5,7 @@ import { buildPalette } from '../board/palette';
 import { drawBombSprite } from '../bonuses/bombs';
 import { drawDragon } from '../bonuses/dragon';
 import { drawSawBlade } from '../bonuses/saw';
-import { drawTurretSprite } from '../bonuses/turret';
+import { drawGatlingSprite } from '../bonuses/gatling';
 import type { teams } from '../../config/players';
 
 const SIZE = 220;
@@ -25,12 +25,8 @@ export function bonusArt(id: BonusId, team: keyof typeof teams = 'blue'): string
     case 'saw':
       drawSawBlade(ctx, m, m, 82, 0.3, p.light, p.tile, p.outline);
       break;
-    case 'turret':
-      ctx.save();
-      ctx.translate(m - 10, m + 10);
-      ctx.scale(1.55, 1.55);
-      drawTurretSprite(ctx, 0, 0, 1, -0.5, 0.6, p);
-      ctx.restore();
+    case 'gatling':
+      drawGatlingSprite(ctx, m - 46, m + 34, 1.45, -0.62, 0.6, p);
       break;
     case 'bombs':
       drawBombSprite(ctx, m + 34, m - 2, 40, p.tile, 0);

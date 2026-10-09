@@ -1,16 +1,16 @@
-// Bonus factory: blackjack total → entity played automatically for that seat.
+// Special-shot factory: charge level → entity fired from that seat's cannon.
 
-import { bonusByTotal, type BonusId } from '../../config/bonuses';
+import { bonusByLevel, type BonusId } from '../../config/bonuses';
 import type { Sim } from '../game/sim';
 import { BombStrike } from './bombs';
 import { Dragon } from './dragon';
+import { Gatling } from './gatling';
 import { Saw } from './saw';
-import { Turret } from './turret';
 import type { BonusEntity } from './types';
 import { sfx } from '../audio/sfx';
 
-export function bonusForTotal(total: number) {
-  return bonusByTotal[total] ?? null;
+export function bonusForLevel(level: number) {
+  return bonusByLevel[level] ?? null;
 }
 
 export function spawnBonus(id: BonusId, owner: number, sim: Sim): BonusEntity {
@@ -18,9 +18,9 @@ export function spawnBonus(id: BonusId, owner: number, sim: Sim): BonusEntity {
     case 'saw':
       sfx.saw();
       return new Saw(owner, sim);
-    case 'turret':
-      sfx.turret();
-      return new Turret(owner, sim);
+    case 'gatling':
+      sfx.gatling();
+      return new Gatling(owner, sim);
     case 'bombs':
       sfx.whoosh();
       return new BombStrike(owner, sim);
